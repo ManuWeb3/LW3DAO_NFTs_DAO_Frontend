@@ -1,8 +1,18 @@
-import { Contract, providers } from "ethers";
-import { formatEther } from "ethers/lib/utils";
+// Proper Flow f/e to b/e:
+// (e.g.) F/e click (create a Proposal) -> calls createProposal() in this code -> implicitly calls createProposal(arg.)  ->
+// S/C code runs -> state vars. gets updated -> we returned daoNumProposals here using contract.numProposals(); ->
+// React state var gets set here using below -> use that React state var in this code itslef for further processing in f() or UI display
+// another e.g. of "further processing in f()" is how numProposals is used inside fetchAllProposals()...
+// made possible by using await getNumProposalsInDAO(); in createProposal()
+// ==========================================================================================
+
+import { Contract, providers } from "ethers";   // no utils this time
+import { formatEther, solidityKeccak256 } from "ethers/lib/utils";
+// utils.formatEther(wei) => string
+// parses an amount in wei and outputs a decimal string that represents wei in Ether as an amount
 import Head from "next/head";
 import { useEffect, useRef, useState } from "react";
-import Web3Modal from "web3modal";
+import Web3Modal from "web3modal";    // used inside useEffect() React hook
 import {
   CRYPTODEVS_DAO_ABI,
   CRYPTODEVS_DAO_CONTRACT_ADDRESS,
@@ -13,17 +23,20 @@ import styles from "../styles/Home.module.css";
 
 export default function Home() {
   // ETH Balance of the DAO contract
-  const [treasuryBalance, setTreasuryBalance] = useState("0");
+  const [treasuryBalance, setTreasuryBalance] = useState("0");  // init as a string 0
   // Number of proposals created in the DAO
-  const [numProposals, setNumProposals] = useState("0");
+  const [numProposals, setNumProposals] = useState("0");        // init as a string 0
   // Array of all proposals created in the DAO
-  const [proposals, setProposals] = useState([]);
+  const [proposals, setProposals] = useState([]);   // multiple proposls possible, hence []
   // User's balance of CryptoDevs NFTs
-  const [nftBalance, setNftBalance] = useState(0);
+  const [nftBalance, setNftBalance] = useState(0);  // init as a number 0
   // Fake NFT Token ID to purchase. Used when creating a proposal.
-  const [fakeNftTokenId, setFakeNftTokenId] = useState("");
+  const [fakeNftTokenId, setFakeNftTokenId] = useState("");   // empty string
+  // never ever this empty string value gets set as the fakeNftTokenId bcz it's the user's enetered value that gets set...
+  // and proposal created
+
   // One of "Create Proposal" or "View Proposals"
-  const [selectedTab, setSelectedTab] = useState("");
+  const [selectedTab, setSelectedTab] = useState("");         // empty string
   // True if waiting for a transaction to be mined, false otherwise.
   const [loading, setLoading] = useState(false);
   // True if user has connected their wallet, false otherwise
@@ -49,6 +62,7 @@ export default function Home() {
     try {
         const signer   = await getProviderOrSigner(true);
         const contract = getDaoContractInstance(signer);
+        // custom helper function made below to reduce code repetition of DAO_Address and ABI
 
         // call the owner function from the contract
         const _owner  = await contract.owner();
@@ -68,10 +82,10 @@ export default function Home() {
    */
   const withdrawDAOEther = async () => {
     try {
-      const signer   = await getProviderOrSigner(true);
-      const contract = getDaoContractInstance(signer);
-
-      const tx = await contract.withdrawEther();
+      const signer   = await getProviderOrSigner(true);   // wallet connected
+      const contract = getDaoContractInstance(signer);    // DAO's instance returned
+      
+      const tx = await contract.withdrawEther();          // signer needed above for this txn
       setLoading(true);
       await tx.wait();
       setLoading(false);
@@ -86,10 +100,15 @@ export default function Home() {
   const getDAOTreasuryBalance = async () => {
     try {
       const provider = await getProviderOrSigner();
+      // provider does good here as it's only a getter
       const balance = await provider.getBalance(
         CRYPTODEVS_DAO_CONTRACT_ADDRESS
       );
+      // core ethers.js f()
+      // provider.getBalance(address OR "ricmoo.eth" = ENS) => Promise<BigNumber> ==== wei amount
       setTreasuryBalance(balance.toString());
+      // just returning the balance won't fo any good
+      // the React state var. has to be set (useState()'s very purpose, everywhere in the code)
     } catch (error) {
       console.error(error);
     }
@@ -99,9 +118,12 @@ export default function Home() {
   const getNumProposalsInDAO = async () => {
     try {
       const provider = await getProviderOrSigner();
+      // just getter
       const contract = getDaoContractInstance(provider);
+      // contract's public state varibale, hence in-built f()
       const daoNumProposals = await contract.numProposals();
-      setNumProposals(daoNumProposals.toString());
+      // set React state var the moment when a proposal gets created in this code + the S/C executes
+      setNumProposals(daoNumProposals.toString());  
     } catch (error) {
       console.error(error);
     }
@@ -112,22 +134,43 @@ export default function Home() {
     try {
       const signer = await getProviderOrSigner(true);
       const nftContract = getCryptodevsNFTContractInstance(signer);
+      // input 'address' of signer (wallet connected) inside nftContract.balanceOf()
       const balance = await nftContract.balanceOf(signer.getAddress());
+      // set React state var
       setNftBalance(parseInt(balance.toString()));
+      // below also works in place of above, seems like 'balance' is already a number
+      // setNftBalance(balance.toString());
+      // bcz NFTbalance state var above is in Int, hence parseInt()
     } catch (error) {
       console.error(error);
     }
   };
 
   // Calls the `createProposal` function in the contract, using the tokenId from `fakeNftTokenId`
+  // custom f() (without any arg) coded by us which implicitly calls...
+  // daoContract.createProposal(fakeNftTokenId)
+  // and takes 'fakeNftTokenId' as an input as required
   const createProposal = async () => {
     try {
-      const signer = await getProviderOrSigner(true);
+      const signer = await getProviderOrSigner(true);   // setter
       const daoContract = getDaoContractInstance(signer);
+      // below 'fakeNftTokenId' React State var got set bcz of the below line of code
+      // onChange={(e) => setFakeNftTokenId(e.target.value)}
+      // whatever user enters on the UI gets stored in (e) and fakeNftTokenId gets set to that value thru setFakeNftTokenId
+      // means, never ever useState("") is assigned to the fakeNftTokenId for creation of its proposal
       const txn = await daoContract.createProposal(fakeNftTokenId);
+      // 'fakeNftTokenId' is an empty string here bcz it's fake...can input any tokenId
+      // actual contracts, nno specific tokenId exists
+      // whatever number you pass as an arg will just be tested in available()
+      // using state var-mapping (no array)...
+      // hence, een if it's any random no., will simply check for address(0)
+      // and mathematically, the mapping gets updated with msg.sender as owner
+      // NO ACTUAL NFT TRANSFER HAPPENS EVER
       setLoading(true);
       await txn.wait();
       await getNumProposalsInDAO();
+      // TODAY ONLY, I understood the purpose of calling getters without any prints
+      // it sents the React State var
       setLoading(false);
     } catch (error) {
       console.error(error);
@@ -141,10 +184,20 @@ export default function Home() {
   const fetchProposalById = async (id) => {
     try {
       const provider = await getProviderOrSigner();
+      // getter
       const daoContract = getDaoContractInstance(provider);
+      // proposals is a mapping (uint256 => Proposal struct)
+      // proposal below is a Proposal struct instance
+      // due to this line of code in solidity => Proposal storage proposal = proposals[numProposals];
+      // proposals[numProposals] is being updated with the keys->numProposals given in ascending order
       const proposal = await daoContract.proposals(id);
+      // JS-Obj created here with keys as Solidity's var-identifiers and values as usual
       const parsedProposal = {
         proposalId: id,
+        // all that's accessed below using (.) operator are members of struct-proposal instance
+        // 'nftTokenId' (= keywords) and the likes used on the RHS of colon (:) below return values stored therein
+        // same 'nftTokenId' on the LHS are the keys created with the same name
+        // not sure whether LHS are (= keywords or not?)
         nftTokenId: proposal.nftTokenId.toString(),
         deadline: new Date(parseInt(proposal.deadline.toString()) * 1000),
         yayVotes: proposal.yayVotes.toString(),
@@ -161,11 +214,23 @@ export default function Home() {
   // and sets the `proposals` state variable
   const fetchAllProposals = async () => {
     try {
+      // below 'proposls' is different from the one created at the top as a React State var
       const proposals = [];
+      // numProposals below is a React state var
+      // gets set everytime when a new proposal is created on UI thru...
+      // await getNumProposalsInDAO(); in createProposal() coded above
+      // getNumProposalsInDAO() sets state var numProposals to be used here
       for (let i = 0; i < numProposals; i++) {
+        // proposals[numProposals] is being updated with the keys->numProposals...
+        // given in ascending order
         const proposal = await fetchProposalById(i);
+        // that's why array created above to push returned struct Propsoal in the above line
         proposals.push(proposal);
+        // .push() works bcz we're not changing React State var - array...
+        // changing a usual array here LOCALLY INSIDE THIS F()... B U T... 
       }
+      // here we are replacing the React state var array 'proposals' above thru below line
+      // by stting it with a new array everytime bcz we cannot use .push() here
       setProposals(proposals);
       return proposals;
     } catch (error) {
@@ -177,15 +242,16 @@ export default function Home() {
   // proposal ID and Vote
   const voteOnProposal = async (proposalId, _vote) => {
     try {
-      const signer = await getProviderOrSigner(true);
+      const signer = await getProviderOrSigner(true);   // setter
       const daoContract = getDaoContractInstance(signer);
 
       let vote = _vote === "YAY" ? 0 : 1;
+      // in JS, it's 0/1 while in Solidity it's string values of enum {}
       const txn = await daoContract.voteOnProposal(proposalId, vote);
       setLoading(true);
       await txn.wait();
       setLoading(false);
-      await fetchAllProposals();
+      await fetchAllProposals();  // why called here?
     } catch (error) {
       console.error(error);
       window.alert(error.data.message);
@@ -239,9 +305,11 @@ export default function Home() {
   };
 
   // Helper function to return a CryptoDevs NFT Contract instance
-  // given a Provider/Signer
+  // given a Provider/Signer as returned by getProviderOrSigner(default=false/true)
+  // DRY practice
   const getCryptodevsNFTContractInstance = (providerOrSigner) => {
     return new Contract(
+      // return new Contract() syntax does exist
       CRYPTODEVS_NFT_CONTRACT_ADDRESS,
       CRYPTODEVS_NFT_ABI,
       providerOrSigner
