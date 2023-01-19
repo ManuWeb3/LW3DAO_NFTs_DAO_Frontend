@@ -7,7 +7,7 @@
 // ==========================================================================================
 
 import { Contract, providers } from "ethers";   // no utils this time
-import { formatEther, solidityKeccak256 } from "ethers/lib/utils";
+import { formatEther } from "ethers/lib/utils";
 // utils.formatEther(wei) => string
 // parses an amount in wei and outputs a decimal string that represents wei in Ether as an amount
 import Head from "next/head";
@@ -262,14 +262,18 @@ export default function Home() {
   // the passed proposal ID
   const executeProposal = async (proposalId) => {
     try {
-      const signer = await getProviderOrSigner(true);
-      const daoContract = getDaoContractInstance(signer);
+      const signer = await getProviderOrSigner(true);   // setter
+      const daoContract = getDaoContractInstance(signer); 
       const txn = await daoContract.executeProposal(proposalId);
       setLoading(true);
       await txn.wait();
       setLoading(false);
-      await fetchAllProposals();
+      await fetchAllProposals();    // why called here?
       getDAOTreasuryBalance();
+      // bcz the executeProposal() uses Contract's balance (Treasury funds) to purchase() NFT
+      // the updated balance should be reflected in the React State var - treasuryBalance
+      // for any further processing of the treasuryBalance accurately
+      // Solidity code itslef can give you hints what all to be updated upon any state-altering txn
     } catch (error) {
       console.error(error);
       window.alert(error.data.message);
@@ -316,7 +320,7 @@ export default function Home() {
     );
   };
 
-  // piece of code that runs everytime the value of `walletConnected` changes
+  // piece of code that runs everytime the value of `walletConnected` CHANGES
   // so when a wallet connects or disconnects
   // Prompts user to connect wallet if not connected
   // and then calls helper functions to fetch the
@@ -329,11 +333,11 @@ export default function Home() {
         disableInjectedProvider: false,
       });
 
-      connectWallet().then(() => {
+      connectWallet().then(() => {  // passed 4 f()s that are bing called only, just another f() body defined
         getDAOTreasuryBalance();
         getUserNFTBalance();
-        getNumProposalsInDAO();
-        getDAOOwner();
+        getNumProposalsInDAO();   // all these 3 f()s display values on the UI 
+        getDAOOwner();            // if owner connected, show 3rd button of "Withdraw DAO Eth"
       });
     }
   }, [walletConnected]);
@@ -359,12 +363,14 @@ export default function Home() {
 
   // Renders the 'Create Proposal' tab content
   function renderCreateProposalTab() {
+    // loading set to false by default
     if (loading) {
       return (
         <div className={styles.description}>
           Loading... Waiting for transaction...
         </div>
       );
+      // if no NFT, then you cannot create a Proposal - msg display
     } else if (nftBalance === 0) {
       return (
         <div className={styles.description}>
@@ -372,6 +378,8 @@ export default function Home() {
           <b>You cannot create or vote on proposals</b>
         </div>
       );
+      // if loading false, NFTs being held, then createProposal button will appear...
+      // which upon click calls createProposal() with i/p as the fake-tokenId = e.target.value
     } else {
       return (
         <div className={styles.container}>
@@ -397,14 +405,19 @@ export default function Home() {
           Loading... Waiting for transaction...
         </div>
       );
+      // if no proposals, display msg
     } else if (proposals.length === 0) {
       return (
         <div className={styles.description}>No proposals have been created</div>
       );
+      // some proposals exist, then show to any address
+      // even if an address does not own any NFTs, still it can at least view the created proposals
     } else {
       return (
         <div>
-          {proposals.map((p, index) => (
+            {proposals.map((p, index) => (
+            // 'p' is the struct-Proposal instance and index inside proposals array: React State var
+            // "p.proposalId" and the likes below all are keys of JS-Obj: 'p' returning values to LHS labels being displayed
             <div key={index} className={styles.proposalCard}>
               <p>Proposal ID: {p.proposalId}</p>
               <p>Fake NFT to Purchase: {p.nftTokenId}</p>
@@ -413,6 +426,14 @@ export default function Home() {
               <p>Nay Votes: {p.nayVotes}</p>
               <p>Executed?: {p.executed.toString()}</p>
               {p.deadline.getTime() > Date.now() && !p.executed ? (
+                // p.deadline.getTime() > Date.now() returning true means proposal is active for now
+                // and open to vote + NOT(executed=default false)
+                // TRUE
+
+                // hence, give 2 options to users to vote
+                // 1. Click button YAY
+                // 2. Click button NAY
+                // accordingly, call voteOnProposal(p.proposalId, "YAY"/"NAY")
                 <div className={styles.flex}>
                   <button
                     className={styles.button2}
@@ -428,6 +449,8 @@ export default function Home() {
                   </button>
                 </div>
               ) : p.deadline.getTime() < Date.now() && !p.executed ? (
+                // if {p.deadline.getTime() > Date.now() && !p.executed ? = 
+                // FALSE, then run below
                 <div className={styles.flex}>
                   <button
                     className={styles.button2}
@@ -462,8 +485,10 @@ export default function Home() {
           <div className={styles.description}>
             Your CryptoDevs NFT Balance: {nftBalance}
             <br />
+
             Treasury Balance: {formatEther(treasuryBalance)} ETH
             <br />
+
             Total Number of Proposals: {numProposals}
           </div>
           <div className={styles.flex}>
@@ -481,7 +506,7 @@ export default function Home() {
             </button>
           </div>
           {renderTabs()}
-          {/* Display additional withdraw button if connected wallet is owner */}
+          {/* Display additional withdraw button if connected wallet is owner using Ternary Op. below*/}
           {isOwner ? (
             <div>
             {loading ? <button className={styles.button}>Loading...</button>
