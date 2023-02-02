@@ -1,8 +1,8 @@
-export const CRYPTODEVS_DAO_CONTRACT_ADDRESS = "0xC5B43f35A776Ab8b647D66f5c937aF891641C259";
+export const CRYPTODEVS_DAO_CONTRACT_ADDRESS = "0x590d0103aBa2E19f9B330461f77832bbe43f1FB5";
 export const CRYPTODEVS_NFT_CONTRACT_ADDRESS = "0x295B62c614B6bBf085f0eaC7F20a377483CdB4a8";
 
 export const CRYPTODEVS_DAO_ABI = [
-    {
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -12,6 +12,11 @@ export const CRYPTODEVS_DAO_ABI = [
       {
         "internalType": "address",
         "name": "_cryptoDevsNFT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_epnsComm",
         "type": "address"
       }
     ],
@@ -156,6 +161,25 @@ export const CRYPTODEVS_DAO_ABI = [
     "name": "transferOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "number",
+        "type": "uint256"
+      }
+    ],
+    "name": "uintToString",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "pure",
     "type": "function"
   },
   {
